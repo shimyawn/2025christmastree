@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Merry Codismas Tree</title>
+    <!-- Modern Designer Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Montserrat', sans-serif; /* Modern Font */
+            color: #fff;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* UI Overlay */
+        #ui-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 15px;
+            border-radius: 20px;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            
+            /* Force single line layout */
+            flex-wrap: nowrap; 
+            white-space: nowrap;
+            width: auto;
+            max-width: 95%;
+            overflow-x: auto; /* Scroll horizontally if screen is too narrow */
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Hide scrollbar for cleaner look */
+        #ui-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: rgba(255, 255, 255, 0.6);
+            padding: 5px 12px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.3s ease;
+            letter-spacing: 0.5px;
+            font-family: 'Montserrat', sans-serif;
+            text-transform: uppercase;
+            flex-shrink: 0; /* Prevent buttons from shrinking/wrapping */
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: #fff;
+            color: #fff;
+        }
+
+        button.active {
+            background: #fff;
+            color: #000;
+            font-weight: 600;
+            border-color: #fff;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+
+        #title-box {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            pointer-events: none;
+            z-index: 5;
+            opacity: 0.8;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+
+        p {
+            margin: 3px 0 0;
+            font-size: 0.6rem;
+            opacity: 0.6;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+
+        /* Mobile Optimization */
+        @media (max-width: 600px) {
+            #ui-container {
+                bottom: 15px;
+                gap: 5px;
+                padding: 6px 10px;
+            }
+            button {
+                font-size: 10px;
+                padding: 4px 10px;
+            }
+            #title-box {
+                top: 20px;
+                left: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="title-box">
+        <h1>Merry Codismas</h1>
+        <p>Generative Art Series</p>
+    </div>
+
+    <div id="ui-container">
+        <button onclick="setMode(0)" class="active" id="btn-0">Galaxy Vortex</button>
+        <button onclick="setMode(1)" id="btn-1">Neon Wave</button>
+        <button onclick="setMode(2)" id="btn-2">Fractal Forest</button>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let animationId;
+        
+        // State Variables (0: Vortex, 1: Wave, 2: Forest)
+        let mode = 0; 
+        let frame = 0;
+        let mouseX = 0;
+        let mouseY = 0;
+
+        // Particle array initialization
+        let particles = [];
+        const PARTICLE_COUNT = 600; 
+        
+        // Star Particle array (New)
+        let starParticles = [];
+        const STAR_PARTICLE_COUNT = 40;
+
+        // Mouse/Touch Event Listeners
+        function updateMouse(e) {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        }
+        window.addEventListener('mousemove', updateMouse);
+        window.addEventListener('touchmove', (e) => {
+            updateMouse(e.touches[0]);
+        }, {passive: true});
+
+        // Resize Handler
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Initial mouse position center
+            if(frame === 0) {
+                mouseX = width / 2;
+                mouseY = height / 2;
+            }
+
+            if(mode === 0) initVortex();
+        }
+        window.addEventListener('resize', resize);
+        
+        // --- Mode Setting ---
+        const buttons = document.querySelectorAll('button');
+        function setMode(index) {
+            mode = index;
+            buttons.forEach((btn, i) => {
+                if(i === index) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+            
+            frame = 0;
+            if (mode === 0) {
+                initVortex();
+            }
+        }
+
+        // -----------------------------------------------------------
+        // 2. Fractal Forest - Interactive White Fractal
+        // -----------------------------------------------------------
+        function drawFractalTreeRecursive(len, angle, currentDepth, maxAllowedDepth, wind) {
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, -len);
+            
+            // Transparency calculation for smooth growth
+            let alpha = 1.0;
+            if (currentDepth >= Math.floor(maxAllowedDepth)) {
+                alpha = maxAllowedDepth - Math.floor(maxAllowedDepth);
+            }
+            if (currentDepth > maxAllowedDepth) return; 
+
+            // Pure white + slight blue tint
+            const baseAlpha = 0.5 + (currentDepth / 12) * 0.5;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${baseAlpha * alpha})`;
+            ctx.shadowColor = `rgba(200, 220, 255, ${0.8 * alpha})`; 
+            ctx.shadowBlur = currentDepth > 8 ? 15 : 5;
+            ctx.lineWidth = currentDepth * 0.7; 
+            
+            ctx.stroke();
+            ctx.shadowBlur = 0; 
+
+            if (currentDepth < 1) return;
+
+            ctx.translate(0, -len);
+
+            // Angle variation
+            const angleOffset = 0.35 + (Math.sin(frame * 0.015) * 0.05) + (wind * 0.3);
+            const shrink = 0.75; 
+
+            // Right branch
+            ctx.save();
+            ctx.rotate(angleOffset);
+            drawFractalTreeRecursive(len * shrink, angle, currentDepth - 1, maxAllowedDepth, wind);
+            ctx.restore();
+
+            // Left branch
+            ctx.save();
+            ctx.rotate(-angleOffset);
+            drawFractalTreeRecursive(len * shrink, angle, currentDepth - 1, maxAllowedDepth, wind);
+            ctx.restore();
+        }
+
+        function drawFractalScene() {
+            // Background: Black + trails
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.save();
+            ctx.translate(width / 2, height);
+            ctx.translate(0, -20); 
+
+            // Mouse Y: Growth Control
+            const growthRatio = 1 - Math.min(1, Math.max(0, mouseY / height));
+            const maxDepth = 2 + growthRatio * 10; 
+
+            // Mouse X: Wind Control
+            const wind = (mouseX / width - 0.5) * 1.0;
+
+            drawFractalTreeRecursive(height * 0.22, -Math.PI/2, maxDepth, maxDepth, wind);
+            
+            ctx.restore();
+        }
+
+
+        // -----------------------------------------------------------
+        // 0. Galaxy Vortex - Infinite Loop, No Floor, Particle Star
+        // -----------------------------------------------------------
+        function initVortex() {
+            // Main tree particles
+            particles = [];
+            for(let i=0; i<PARTICLE_COUNT; i++) {
+                let typeRand = Math.random();
+                let type = 0; // Green default
+                if (typeRand > 0.75) type = 1; // Red
+                else if (typeRand > 0.85) type = 2; // Yellow
+                else if (typeRand > 0.95) type = 3; // White
+
+                particles.push({
+                    y: Math.random() * height * 1.5, 
+                    angle: Math.random() * Math.PI * 2,
+                    baseSpeed: 0.02 + Math.random() * 0.03,
+                    radiusOffset: Math.random() * 20,
+                    type: type
+                });
+            }
+
+            // Star particles (Persistent)
+            starParticles = [];
+            for(let i=0; i<STAR_PARTICLE_COUNT; i++) {
+                starParticles.push({
+                    angle: Math.random() * Math.PI * 2,
+                    distBase: Math.random() * 8, // Base distance from star center
+                    speed: 0.05 + Math.random() * 0.1,
+                    sizeBase: 0.5 + Math.random() * 2.0,
+                    blinkOffset: Math.random() * Math.PI * 2
+                });
+            }
+        }
+
+        function drawVortex() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.25)'; 
+            ctx.fillRect(0, 0, width, height);
+            ctx.globalCompositeOperation = 'lighter';
+
+            // Interaction Variables
+            const ratioX = mouseX / width; // 0 (Left) to 1 (Right)
+            
+            // Speed Control for Tree
+            const speedMultiplier = 0.2 + ratioX * 2.8;
+            
+            const maxRadius = Math.min(width, height) * 0.45;
+            const virtualTreeHeight = height * 1.5; 
+            const topY = height * 0.1; // Tree top (Star location)
+
+            // --- Draw Tree Particles ---
+            particles.forEach(p => {
+                p.angle += p.baseSpeed * speedMultiplier;
+                p.y -= 2.0; 
+
+                // Infinite loop logic
+                if (p.y < topY) {
+                    p.y += virtualTreeHeight; 
+                }
+
+                let relativeY = p.y - topY;
+                let hRatio = relativeY / virtualTreeHeight; 
+
+                // Radius calculation
+                const currentRadius = hRatio * maxRadius + p.radiusOffset;
+
+                // Projection
+                const px = width/2 + Math.cos(p.angle) * currentRadius;
+                const py = p.y + Math.sin(p.angle) * (currentRadius * 0.25);
+                
+                // Alpha fade out
+                let alpha = 1.0;
+                if (hRatio > 0.8) alpha = 1.0 - (hRatio - 0.8) * 5.0;
+                if (hRatio < 0.1) alpha = hRatio * 10.0;
+                alpha = Math.max(0, Math.min(1, alpha));
+
+                if (alpha <= 0) return;
+
+                const scale = hRatio * 3.5 + 0.5;
+
+                ctx.beginPath();
+                ctx.arc(px, py, scale, 0, Math.PI * 2);
+                
+                let color;
+                if (p.type === 0) color = `hsla(130, 100%, 50%, ${alpha})`; // Neon Green
+                else if (p.type === 1) color = `hsla(0, 100%, 60%, ${alpha})`;   // Red
+                else if (p.type === 2) color = `hsla(50, 100%, 50%, ${alpha})`;  // Yellow
+                else color = `hsla(200, 20%, 100%, ${alpha})`; // White
+
+                ctx.fillStyle = color;
+                ctx.fill();
+            });
+            
+            // --- Particle Star (Interactive) ---
+            const starX = width/2;
+            const starY = topY;
+            
+            // Interaction: Left (Calm, Dim) <--> Right (Fast, Bright, Expanded)
+            const starSpeed = speedMultiplier; 
+            const starExpand = 0.5 + ratioX * 1.5; // Expansion factor
+            const starBrightness = 0.4 + ratioX * 0.6; // Opacity factor
+
+            starParticles.forEach(sp => {
+                // Orbit
+                sp.angle += sp.speed * starSpeed; 
+                
+                // Position with expansion
+                const currentDist = sp.distBase * starExpand;
+                const sx = starX + Math.cos(sp.angle) * currentDist;
+                const sy = starY + Math.sin(sp.angle) * currentDist;
+                
+                // Blink effect (linked to speed)
+                const blink = Math.sin(frame * 0.1 * starSpeed + sp.blinkOffset);
+                const alpha = (starBrightness) * (0.6 + 0.4 * blink); // Min 0.6 of brightness
+                
+                // Size adjustment
+                const sSize = sp.sizeBase * starExpand;
+
+                ctx.shadowBlur = 10 * ratioX + 5; // More blur on right
+                ctx.shadowColor = '#ffff00';
+                ctx.fillStyle = `rgba(255, 255, 150, ${alpha})`;
+                
+                ctx.beginPath();
+                ctx.arc(sx, sy, sSize, 0, Math.PI*2);
+                ctx.fill();
+            });
+
+            // Core glow (gets brighter and bigger)
+            ctx.shadowBlur = 20 + 20 * ratioX;
+            const coreAlpha = 0.6 + 0.4 * ratioX;
+            ctx.fillStyle = `rgba(255, 255, 200, ${coreAlpha})`;
+            ctx.beginPath();
+            ctx.arc(starX, starY, 4 + 4 * ratioX, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.globalCompositeOperation = 'source-over'; 
+            ctx.shadowBlur = 0;
+        }
+
+
+        // -----------------------------------------------------------
+        // 1. Neon Wave (Neon Sine)
+        // -----------------------------------------------------------
+        function drawNeonSine() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Thinner, more elegant lines
+            ctx.lineWidth = 1.8; 
+
+            const centerX = width / 2;
+            const topY = height * 0.15;
+            const bottomY = height * 0.85;
+            const treeHeight = bottomY - topY;
+            const layers = 50; 
+            
+            // Loop changed to start from 2 to remove the sharp top line
+            for (let i = 2; i < layers; i++) {
+                const ratio = i / layers; 
+                const y = topY + ratio * treeHeight;
+                const maxBreadth = (ratio * width * 0.5) + 10;
+
+                ctx.beginPath();
+                const frequency = 0.04 + (mouseX / width) * 0.04;
+                const phase = frame * 0.15 + i * 0.5;
+                
+                for (let xOffset = -maxBreadth; xOffset <= maxBreadth; xOffset += 5) {
+                    const px = centerX + xOffset;
+                    const distRatio = 1 - Math.abs(xOffset / maxBreadth);
+                    const wave = Math.sin(xOffset * frequency + phase) * 20 * distRatio;
+                    const py = y + wave;
+
+                    if (xOffset === -maxBreadth) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+
+                // Sophisticated Gradient
+                const hue = 45 + (ratio * 135); 
+                
+                // Color configuration
+                const saturation = 90;
+                const lightness = 60;
+                const alpha = 1.0 - (ratio * 0.1); 
+
+                ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
+                ctx.shadowColor = `hsla(${hue}, 100%, 50%, 0.8)`;
+                ctx.shadowBlur = 12; // Enhanced glow
+                ctx.stroke();
+            }
+
+            // Elegant Floor Line
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.shadowColor = '#fff';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(centerX - width*0.4, bottomY + 30);
+            ctx.lineTo(centerX + width*0.4, bottomY + 30);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+
+        // --- Main Animation Loop ---
+        function animate() {
+            frame++;
+
+            if (mode === 2) { 
+                drawFractalScene();
+            } else if (mode === 0) {
+                drawVortex();
+            } else if (mode === 1) { 
+                drawNeonSine();
+            }
+
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // Initialize
+        resize();
+        initVortex();
+        animate();
+        setMode(0);
+
+    </script>
+</body>
+</html>
